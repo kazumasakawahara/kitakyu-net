@@ -1,0 +1,13 @@
+
+Data Processing Report
+======================
+Generated: 2025-10-31 19:52:33
+
+Statistics:
+-----------
+Total records processed: 631
+Valid records: 366
+Invalid records: 0
+Duplicates detected: 265
+
+Success rate: 58.00%

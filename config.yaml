@@ -1,0 +1,200 @@
+# kitakyu-net 設定ファイル
+
+# プロジェクト情報
+project:
+  name: "kitakyu-net"
+  version: "0.1.0"
+  description: "北九州市障害福祉サービス事業所情報管理システム"
+
+# データディレクトリ
+paths:
+  data_root: "./data"
+  raw_data: "./data/raw"
+  processed_data: "./data/processed"
+  templates: "./data/templates"
+  logs: "./logs"
+
+# WAM NET設定
+wamnet:
+  base_url: "https://www.wam.go.jp/sfkohyoout/COP000100E0000.do"
+  prefecture: "福岡県"
+  city: "北九州市"
+  service_types:
+    - "居宅介護"
+    - "重度訪問介護"
+    - "同行援護"
+    - "行動援護"
+    - "療養介護"
+    - "生活介護"
+    - "短期入所"
+    - "施設入所支援"
+    - "共同生活援助"
+    - "自立訓練（機能訓練）"
+    - "自立訓練（生活訓練）"
+    - "就労移行支援"
+    - "就労継続支援A型"
+    - "就労継続支援B型"
+    - "就労定着支援"
+    - "自立生活援助"
+
+# 北九州市の区
+districts:
+  - "門司区"
+  - "若松区"
+  - "戸畑区"
+  - "小倉北区"
+  - "小倉南区"
+  - "八幡東区"
+  - "八幡西区"
+
+# 障害種別
+disability_types:
+  - "身体障害"
+  - "知的障害"
+  - "精神障害"
+  - "発達障害"
+  - "難病"
+  - "高次脳機能障害"
+
+# 障害支援区分
+support_levels:
+  - "区分なし"
+  - "区分1"
+  - "区分2"
+  - "区分3"
+  - "区分4"
+  - "区分5"
+  - "区分6"
+
+# 空き状況
+availability_statuses:
+  - "空きあり"
+  - "要確認"
+  - "待機中"
+  - "満員"
+  - "不明"
+
+# サービスカテゴリ
+service_categories:
+  介護給付:
+    - "居宅介護"
+    - "重度訪問介護"
+    - "同行援護"
+    - "行動援護"
+    - "療養介護"
+    - "生活介護"
+    - "短期入所"
+    - "施設入所支援"
+    - "共同生活援助"
+  訓練等給付:
+    - "自立訓練（機能訓練）"
+    - "自立訓練（生活訓練）"
+    - "就労移行支援"
+    - "就労継続支援A型"
+    - "就労継続支援B型"
+    - "就労定着支援"
+    - "自立生活援助"
+
+# Google Sheets設定
+google_sheets:
+  spreadsheet_name: "kitakyu-facilities"
+  folder_path: "AI-Managed-Sheets"
+  sheets:
+    - name: "basic_info"
+      columns:
+        - "事業所ID"
+        - "事業所名"
+        - "法人名"
+        - "事業所番号"
+        - "サービス種別"
+        - "サービスカテゴリ"
+        - "郵便番号"
+        - "住所"
+        - "所在区"
+        - "電話番号"
+        - "FAX"
+        - "メール"
+        - "定員"
+        - "空き状況"
+        - "営業日"
+        - "営業時間"
+        - "データソース"
+        - "最終更新日"
+        - "更新者"
+    - name: "service_details"
+      columns:
+        - "事業所ID"
+        - "対応障害種別"
+        - "対応支援区分"
+        - "送迎の有無"
+        - "送迎エリア"
+        - "食事提供"
+        - "医療的ケア対応"
+        - "強度行動障害対応"
+        - "主な活動内容"
+        - "作業種目"
+        - "工賃情報"
+    - name: "coordination"
+      columns:
+        - "事業所ID"
+        - "相談支援連携実績"
+        - "サービス管理責任者名"
+        - "管理者名"
+        - "連携時の特記事項"
+        - "地域移行実績"
+        - "就労移行実績"
+    - name: "individual_notes"
+      columns:
+        - "事業所ID"
+        - "利用者ID"
+        - "本人との相性"
+        - "家族の評価"
+        - "支援上の注意点"
+        - "最終連絡日"
+        - "次回連絡予定"
+    - name: "master_data"
+      columns:
+        - "カテゴリ"
+        - "値"
+        - "説明"
+
+# Neo4j設定
+neo4j:
+  constraints:
+    - label: "Facility"
+      property: "facility_id"
+      type: "UNIQUE"
+  indexes:
+    - label: "Facility"
+      properties: ["name"]
+    - label: "Facility"
+      properties: ["service_type"]
+    - label: "Facility"
+      properties: ["district"]
+    - label: "Facility"
+      properties: ["availability_status"]
+
+# ログ設定
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  rotation: "1 week"
+  retention: "1 month"
+  compression: "zip"
+
+# データ検証
+validation:
+  required_fields:
+    - "name"
+    - "service_type"
+    - "phone"
+    - "address"
+  phone_pattern: "^0\\d{1,4}-\\d{1,4}-\\d{4}$"
+  postal_code_pattern: "^\\d{3}-\\d{4}$"
+  facility_number_pattern: "^\\d{10}$"
+
+# 更新頻度
+update_schedule:
+  wamnet_check: "monthly"  # 月次
+  sheets_sync: "weekly"    # 週次
+  neo4j_import: "weekly"   # 週次
