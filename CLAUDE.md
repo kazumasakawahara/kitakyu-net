@@ -22,13 +22,15 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 ## プロジェクト概要
 
 ### 目的
-計画相談支援専門員が北九州市内の障害福祉サービス事業所の情報を効率的に管理し、エコマップ作成や利用者へのサービス紹介を円滑に行うための情報管理システム。
+計画相談支援専門員が障害福祉サービス利用者の支援を効率的に行うための、AI支援機能を備えた包括的な利用者管理・支援計画システム。
 
 ### 主要機能
-1. WAM NET（福祉医療機構）からの事業所基本情報の取得・整形
-2. Googleスプレッドシートでの情報管理・共同編集
-3. Neo4jグラフデータベースへのインポート
-4. エコマップシステムとの連携
+1. 利用者管理: CRUD操作、検索、フィルタリング
+2. AI支援アセスメント: 自然言語によるニーズ分析、ICF分類
+3. 支援計画作成: 目標設定、サービス選定
+4. モニタリング: 進捗確認、サービス評価、計画見直し判断
+5. 施設検索: RAGベースの自然言語検索
+6. 利用者詳細ビュー: 包括的な支援情報ダッシュボード
 
 ### 対象ユーザー
 - 計画相談支援専門員
@@ -39,15 +41,15 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 ## システムアーキテクチャ
 
 ```
-[WAM NET] 
-    ↓ (データ取得)
-[Python Scraper] 
-    ↓ (整形・加工)
-[Googleスプレッドシート] ← (手動追記・編集)
-    ↓ (定期インポート)
-[Neo4j Database] 
-    ↓ (連携)
-[エコマップ可視化システム]
+[Streamlit Frontend]
+    ↓ (REST API)
+[FastAPI Backend]
+    ↓
+[Neo4j Database] ← グラフDB（利用者・アセスメント・計画・モニタリング）
+    ↓
+[Ollama LLM] ← AI支援（GPT-OSS 20B）
+    ↓
+[RAG Pipeline] ← 施設検索・ニーズ分析
 ```
 
 ---
