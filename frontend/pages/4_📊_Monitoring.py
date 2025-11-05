@@ -636,7 +636,8 @@ if st.session_state.get("creating_monitoring"):
                     # 作成者IDを追加（仮）
                     monitoring_data = st.session_state["monitoring_data"].copy()
                     monitoring_data["plan_id"] = st.session_state["monitoring_plan_id"]
-                    monitoring_data["created_by"] = "staff_demo"  # TODO: 実際のスタッフID
+                    # NOTE: 認証システム実装時にログインユーザーIDに変更予定
+                    monitoring_data["created_by"] = "staff_demo"
 
                     # モニタリング記録を作成
                     result = create_monitoring_record(
