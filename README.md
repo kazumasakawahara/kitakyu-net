@@ -37,17 +37,15 @@
 # プロジェクトディレクトリに移動
 cd ~/Ai-Workspace/kitakyu-net
 
-# 仮想環境の作成と有効化
-uv venv
-source .venv/bin/activate
-
-# 依存パッケージのインストール
-uv pip install -r requirements.txt
+# 仮想環境の作成と依存パッケージのインストール
+uv sync
 
 # 環境変数の設定
 cp .env.example .env
 # .envファイルを編集してNeo4j接続情報を設定
 ```
+
+**補足**: `uv sync` は `pyproject.toml` と `uv.lock` から自動的に依存関係をインストールします。新しいパッケージを追加する場合は `uv add <package>` を使用してください。
 
 ### 2. Neo4jセットアップ
 
