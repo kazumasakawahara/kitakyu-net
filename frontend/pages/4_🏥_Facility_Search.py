@@ -10,7 +10,7 @@ from typing import Dict, Any
 import json
 
 # API endpoint configuration
-API_BASE_URL = "http://localhost:8001"
+API_BASE_URL = "http://localhost:8000"
 
 
 def get_health_status() -> Dict[str, Any]:
@@ -74,7 +74,7 @@ with col3:
         st.switch_page("pages/3_🎯_Plan_Creation.py")
 with col4:
     if st.button("📈 モニタリング", use_container_width=True):
-        st.switch_page("pages/5_📈_Monitoring.py")
+        st.switch_page("pages/4_📊_Monitoring.py")
 
 st.markdown("---")
 

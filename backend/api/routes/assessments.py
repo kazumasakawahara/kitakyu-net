@@ -3,6 +3,7 @@
 Assessment API routes.
 """
 from fastapi import APIRouter, HTTPException
+from typing import List
 from loguru import logger
 
 from backend.api.models.assessment import (
@@ -86,6 +87,18 @@ async def reanalyze_assessment(assessment_id: str):
         raise
     except Exception as e:
         logger.error(f"Error re-analyzing assessment {assessment_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/user/{user_id}", response_model=List[Assessment])
+async def get_user_assessments(user_id: str):
+    """Get all assessments for a user."""
+    try:
+        service = get_assessment_service()
+        assessments = service.list_user_assessments(user_id)
+        return assessments
+    except Exception as e:
+        logger.error(f"Error getting assessments for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

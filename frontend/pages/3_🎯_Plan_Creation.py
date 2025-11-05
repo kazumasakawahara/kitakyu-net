@@ -16,22 +16,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSSでセレクトボックスのドロップダウンリストを右にオフセット
-st.markdown("""
-<style>
-    /* セレクトボックスのドロップダウンメニューを右に200pxずらす（約5cm） */
-    div[data-baseweb="select"] > div:last-child {
-        margin-left: 200px !important;
-    }
-    /* ドロップダウンリストの幅を調整 */
-    div[data-baseweb="popover"] {
-        margin-left: 200px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # API設定
-API_BASE_URL = "http://localhost:8001/api"
+API_BASE_URL = "http://localhost:8000/api"
 
 # セッションステート初期化
 if "selected_user_id" not in st.session_state:
