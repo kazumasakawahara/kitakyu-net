@@ -214,14 +214,14 @@ class PlanService:
         self, user_id: str, status: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        List all plans for a user.
+        List all plans for a user with goals and services.
 
         Args:
             user_id: User ID
             status: Optional status filter (draft, active, completed)
 
         Returns:
-            List of plan dicts
+            List of plan dicts with goals and services
         """
         conditions = ["p.user_id = $user_id"]
         params = {"user_id": user_id}
@@ -236,8 +236,9 @@ class PlanService:
         MATCH (u:User {{user_id: $user_id}})-[:HAS_PLAN]->(p:Plan)
         WHERE {where_clause}
         OPTIONAL MATCH (p)-[:HAS_GOAL]->(g:Goal)
-        WITH p, count(g) as goal_count
-        RETURN p, goal_count
+        OPTIONAL MATCH (p)-[:INCLUDES_SERVICE]->(s:ServiceNeed)
+        WITH p, collect(DISTINCT g) as goals, collect(DISTINCT s) as services
+        RETURN p, goals, services
         ORDER BY p.created_at DESC
         """
 
@@ -247,10 +248,50 @@ class PlanService:
 
             for record in result:
                 plan_node = record["p"]
-                goal_count = record["goal_count"]
+                goals = record["goals"]
+                services = record["services"]
 
                 plan = self._format_plan(dict(plan_node))
-                plan["goal_count"] = goal_count
+
+                # Organize goals by type
+                long_term_goals = []
+                short_term_goals = []
+
+                for goal in goals:
+                    if goal:  # Check if goal is not None
+                        goal_dict = dict(goal)
+                        formatted_goal = self._format_goal(goal_dict)
+
+                        if goal_dict.get("goal_type") == "長期目標":
+                            long_term_goals.append(formatted_goal)
+                        elif goal_dict.get("goal_type") == "短期目標":
+                            short_term_goals.append(formatted_goal)
+
+                # Sort by order
+                long_term_goals.sort(key=lambda x: x.get("goal_order", 0))
+                short_term_goals.sort(key=lambda x: x.get("goal_order", 0))
+
+                plan["long_term_goals"] = long_term_goals
+                plan["short_term_goals"] = short_term_goals
+
+                # Format services
+                formatted_services = []
+                for service in services:
+                    if service:  # Check if service is not None
+                        service_dict = {}
+                        # Convert all Neo4j DateTime objects to ISO strings
+                        for key, value in dict(service).items():
+                            if hasattr(value, "iso_format"):
+                                service_dict[key] = value.iso_format()
+                            elif value is not None:
+                                service_dict[key] = value
+                            else:
+                                service_dict[key] = None
+                        formatted_services.append(service_dict)
+
+                plan["services"] = formatted_services
+                plan["goal_count"] = len(long_term_goals) + len(short_term_goals)
+
                 plans.append(plan)
 
             logger.info(f"Found {len(plans)} plans for user {user_id}")
@@ -339,39 +380,31 @@ class PlanService:
 
     def _format_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Format plan for API response."""
-        # Convert Neo4j DateTime to ISO string
-        if "created_at" in plan:
-            plan["created_at"] = (
-                plan["created_at"].iso_format()
-                if hasattr(plan["created_at"], "iso_format")
-                else str(plan["created_at"])
-            )
-        if "updated_at" in plan:
-            plan["updated_at"] = (
-                plan["updated_at"].iso_format()
-                if hasattr(plan["updated_at"], "iso_format")
-                else str(plan["updated_at"])
-            )
+        # Convert all Neo4j DateTime objects to ISO strings
+        formatted_plan = {}
+        for key, value in plan.items():
+            if hasattr(value, "iso_format"):
+                formatted_plan[key] = value.iso_format()
+            elif value is not None:
+                formatted_plan[key] = value
+            else:
+                formatted_plan[key] = None
 
-        return plan
+        return formatted_plan
 
     def _format_goal(self, goal: Dict[str, Any]) -> Dict[str, Any]:
         """Format goal for API response."""
-        # Convert Neo4j DateTime to ISO string
-        if "created_at" in goal:
-            goal["created_at"] = (
-                goal["created_at"].iso_format()
-                if hasattr(goal["created_at"], "iso_format")
-                else str(goal["created_at"])
-            )
-        if "updated_at" in goal:
-            goal["updated_at"] = (
-                goal["updated_at"].iso_format()
-                if hasattr(goal["updated_at"], "iso_format")
-                else str(goal["updated_at"])
-            )
+        # Convert all Neo4j DateTime objects to ISO strings
+        formatted_goal = {}
+        for key, value in goal.items():
+            if hasattr(value, "iso_format"):
+                formatted_goal[key] = value.iso_format()
+            elif value is not None:
+                formatted_goal[key] = value
+            else:
+                formatted_goal[key] = None
 
-        return goal
+        return formatted_goal
 
 
 # Global service instance

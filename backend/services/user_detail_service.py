@@ -129,13 +129,12 @@ class UserDetailService:
         return None
 
     def _get_goal_progress(self, user_id: str) -> List[Dict[str, Any]]:
-        """目標達成状況"""
+        """目標達成状況（最新のモニタリング評価を含む）"""
         query = """
         MATCH (u:User {user_id: $user_id})-[:HAS_PLAN]->(p:Plan)
-        WHERE p.status = 'active'
         MATCH (p)-[:HAS_GOAL]->(g:Goal)
         RETURN g, p.plan_id as plan_id
-        ORDER BY g.priority
+        ORDER BY g.goal_order
         """
         result = self.db.execute_read(query, {"user_id": user_id})
 
@@ -143,6 +142,11 @@ class UserDetailService:
         for record in result:
             goal = _convert_neo4j_types(dict(record["g"]))
             goal["plan_id"] = record["plan_id"]
+
+            # デフォルト値を設定
+            goal["achievement_status"] = "未評価"
+            goal["achievement_rate"] = 0
+
             goals.append(goal)
 
         return goals
@@ -185,6 +189,42 @@ class UserDetailService:
     def _get_alerts(self, user_id: str) -> List[Dict[str, str]]:
         """アラート情報（契約更新、モニタリング期限等）"""
         alerts = []
+
+        # ユーザー基本情報取得（手帳有効期限チェック用）
+        user_query = """
+        MATCH (u:User {user_id: $user_id})
+        RETURN u.mental_health_notebook as mental_health_notebook,
+               u.mental_health_notebook_grade as mental_health_notebook_grade,
+               u.mental_health_notebook_expiry as mental_health_notebook_expiry
+        """
+        user_result = self.db.execute_read(user_query, {"user_id": user_id})
+        if user_result and user_result[0]["mental_health_notebook"]:
+            expiry_date = user_result[0].get("mental_health_notebook_expiry")
+            if expiry_date:
+                try:
+                    # Neo4j Dateオブジェクトの処理
+                    if hasattr(expiry_date, 'iso_format'):
+                        expiry_date_str = expiry_date.iso_format()
+                    else:
+                        expiry_date_str = str(expiry_date)
+
+                    expiry_dt = datetime.fromisoformat(expiry_date_str[:10])
+                    days_until = (expiry_dt - datetime.now()).days
+
+                    if days_until < 0:
+                        alerts.append({
+                            "type": "mental_health_notebook_expired",
+                            "severity": "high",
+                            "message": f"精神保健福祉手帳の有効期限が切れています（{expiry_date_str[:10]}）"
+                        })
+                    elif days_until <= 90:  # 3ヶ月以内
+                        alerts.append({
+                            "type": "mental_health_notebook_expiring",
+                            "severity": "medium",
+                            "message": f"精神保健福祉手帳の有効期限まで{days_until}日です（{expiry_date_str[:10]}）"
+                        })
+                except:
+                    pass
 
         # モニタリング期限チェック
         recent_monitoring = self._get_recent_monitoring(user_id)

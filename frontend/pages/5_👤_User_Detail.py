@@ -7,7 +7,7 @@ import requests
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-API_BASE_URL = "http://localhost:8001/api"
+API_BASE_URL = "http://localhost:8000/api"
 
 st.set_page_config(page_title="利用者詳細", page_icon="👤", layout="wide")
 
@@ -61,23 +61,87 @@ def display_basic_info(basic_info: Dict[str, Any]):
 
     with col1:
         st.metric("氏名", basic_info.get("name", ""))
-        st.write(f"**カナ**: {basic_info.get('name_kana', '')}")
+        st.write(f"**カナ**: {basic_info.get('kana', basic_info.get('name_kana', ''))}")
 
     with col2:
-        gender = basic_info.get("gender", "")
         birth_date = basic_info.get("birth_date", "")
-        st.metric("性別", gender)
-        st.write(f"**生年月日**: {birth_date[:10] if birth_date else ''}")
+        age = basic_info.get("age", "")
+        st.metric("生年月日", birth_date[:10] if birth_date else "")
+        st.write(f"**年齢**: {age}歳" if age else "**年齢**: -")
 
     with col3:
-        disability_type = basic_info.get("disability_type", "")
+        gender = basic_info.get("gender", "")
+        st.metric("性別", gender if gender else "未設定")
         support_level = basic_info.get("support_level", "")
-        st.metric("障害種別", disability_type)
-        st.write(f"**支援区分**: {support_level}")
+        st.write(f"**支援区分**: {support_level if support_level else '未判定'}")
 
     with col4:
+        disability_type = basic_info.get("disability_type", "")
+        st.metric("障害種別", disability_type if disability_type else "未設定")
         living_situation = basic_info.get("living_situation", "")
-        st.metric("居住状況", living_situation)
+        st.write(f"**居住状況**: {living_situation if living_situation else '未設定'}")
+
+    # 手帳情報
+    disability_type = basic_info.get("disability_type", "")
+    therapy_notebook = basic_info.get("therapy_notebook", False)
+    therapy_notebook_grade = basic_info.get("therapy_notebook_grade", "")
+    mental_health_notebook = basic_info.get("mental_health_notebook", False)
+    mental_health_notebook_grade = basic_info.get("mental_health_notebook_grade", "")
+    mental_health_notebook_expiry = basic_info.get("mental_health_notebook_expiry", "")
+
+    # 手帳情報がある場合のみ表示
+    has_notebook_info = False
+
+    # 知的障害の場合は療育手帳を確認
+    if "知的" in disability_type and (therapy_notebook or therapy_notebook_grade):
+        has_notebook_info = True
+
+    # 精神障害の場合は精神保健福祉手帳を確認
+    if "精神" in disability_type and (mental_health_notebook or mental_health_notebook_grade):
+        has_notebook_info = True
+
+    if has_notebook_info:
+        st.markdown("---")
+        st.markdown("**📋 手帳情報**")
+
+        col_notebook1, col_notebook2 = st.columns(2)
+
+        with col_notebook1:
+            # 知的障害の場合のみ療育手帳を表示
+            if "知的" in disability_type:
+                if therapy_notebook and therapy_notebook_grade:
+                    st.info(f"**療育手帳**: {therapy_notebook_grade}")
+                else:
+                    st.write("**療育手帳**: 未取得")
+
+        with col_notebook2:
+            # 精神障害の場合のみ精神保健福祉手帳を表示
+            if "精神" in disability_type:
+                if mental_health_notebook and mental_health_notebook_grade:
+                    expiry_text = ""
+                    if mental_health_notebook_expiry:
+                        expiry_date_str = mental_health_notebook_expiry[:10] if len(mental_health_notebook_expiry) > 10 else mental_health_notebook_expiry
+                        expiry_text = f" (有効期限: {expiry_date_str})"
+
+                        # 有効期限チェック（警告表示）
+                        try:
+                            from datetime import datetime
+                            expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
+                            today = datetime.now().date()
+                            days_until_expiry = (expiry_date - today).days
+
+                            if days_until_expiry < 0:
+                                st.error(f"🚨 **精神保健福祉手帳**: {mental_health_notebook_grade} - 有効期限切れ ({expiry_date_str})")
+                            elif days_until_expiry <= 90:
+                                st.warning(f"⚠️ **精神保健福祉手帳**: {mental_health_notebook_grade} - 有効期限まで {days_until_expiry}日 ({expiry_date_str})")
+                            else:
+                                st.info(f"**精神保健福祉手帳**: {mental_health_notebook_grade}{expiry_text}")
+                        except:
+                            st.info(f"**精神保健福祉手帳**: {mental_health_notebook_grade}{expiry_text}")
+                    else:
+                        st.info(f"**精神保健福祉手帳**: {mental_health_notebook_grade}")
+                else:
+                    st.write("**精神保健福祉手帳**: 未取得")
 
 
 def display_current_services(services: List[Dict[str, Any]]):
@@ -127,30 +191,50 @@ def display_recent_monitoring(monitoring: Optional[Dict[str, Any]]):
 
     # 詳細
     with st.expander("詳細を表示"):
-        st.write(f"**全体サマリー**: {monitoring.get('overall_summary', monitoring.get('overall_progress', ''))}")
+        # 全体サマリー
+        overall_summary = monitoring.get('overall_summary', monitoring.get('overall_progress', ''))
+        if overall_summary:
+            st.write(f"**全体サマリー**: {overall_summary}")
+        else:
+            st.info("💡 全体サマリーは記録されていません")
 
         # 強み
         strengths = monitoring.get('strengths', [])
         if strengths:
+            st.write("")
             st.write("**強み・進展**:")
             for strength in strengths:
                 st.write(f"  • {strength}")
+        else:
+            st.write("")
+            st.write("**強み・進展**: 記録なし")
 
         # 課題
         challenges = monitoring.get('challenges', [])
         if challenges:
+            st.write("")
             st.write("**課題・懸念事項**:")
             for challenge in challenges:
                 st.write(f"  • {challenge}")
+        else:
+            st.write("")
+            st.write("**課題・懸念事項**: 記録なし")
 
         # 家族フィードバック
         family_feedback = monitoring.get('family_feedback', '')
         if family_feedback:
+            st.write("")
             st.write(f"**家族からのフィードバック**: {family_feedback}")
+        else:
+            st.write("")
+            st.write("**家族からのフィードバック**: なし")
 
         # 計画見直しの必要性
+        st.write("")
         if monitoring.get('plan_revision_needed'):
             st.warning(f"⚠️ 計画見直しが必要: {monitoring.get('revision_reason', '')}")
+        else:
+            st.write("**計画変更**: 不要")
 
         # サービス評価
         import json
@@ -189,18 +273,32 @@ def display_goal_progress(goals: List[Dict[str, Any]]):
         goal_text = goal.get("goal_text", goal.get("goal", "目標"))
         achievement_status = goal.get("achievement_status", "未達成")
 
-        # 進捗率を算出（簡易版）
-        progress = 0
-        if achievement_status == "達成":
-            progress = 100
-        elif achievement_status == "一部達成":
-            progress = 50
-        elif achievement_status == "継続中":
-            progress = 30
+        # 達成率を取得（APIから返される場合）
+        achievement_rate = goal.get("achievement_rate")
+
+        # 達成率が明示的に設定されている場合はそれを使用
+        if achievement_rate is not None:
+            progress = achievement_rate
+        else:
+            # 達成率がない場合は状況から推定
+            if achievement_status == "達成":
+                progress = 100
+            elif achievement_status == "一部達成":
+                progress = 50
+            elif achievement_status == "継続中":
+                progress = 30
+            else:
+                progress = 0
 
         st.write(f"**{goal.get('goal_type', '目標')}**: {goal_text}")
         st.progress(progress / 100)
-        st.caption(f"状況: {achievement_status}")
+
+        # 達成率と状況を表示
+        if achievement_rate is not None:
+            st.caption(f"達成率: {progress}% | 状況: {achievement_status}")
+        else:
+            st.caption(f"状況: {achievement_status}")
+
         st.divider()
 
 

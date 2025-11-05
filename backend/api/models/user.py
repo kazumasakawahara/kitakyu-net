@@ -18,6 +18,10 @@ class UserBase(BaseModel):
     disability_grade: Optional[str] = Field(None, description="障害等級")
     support_level: Optional[str] = Field(None, description="障害支援区分")
     therapy_notebook: Optional[bool] = Field(None, description="療育手帳の有無")
+    therapy_notebook_grade: Optional[str] = Field(None, description="療育手帳等級 (A/B1/B2/A3)")
+    mental_health_notebook: Optional[bool] = Field(None, description="精神保健福祉手帳の有無")
+    mental_health_notebook_grade: Optional[str] = Field(None, description="精神保健福祉手帳等級 (1級/2級/3級)")
+    mental_health_notebook_expiry: Optional[date] = Field(None, description="精神保健福祉手帳有効期限")
     medical_care_needs: Optional[bool] = Field(None, description="医療的ケア")
     behavioral_support_needs: Optional[bool] = Field(
         None, description="強度行動障害"
@@ -47,6 +51,10 @@ class UserUpdate(BaseModel):
     disability_grade: Optional[str] = None
     support_level: Optional[str] = None
     therapy_notebook: Optional[bool] = None
+    therapy_notebook_grade: Optional[str] = None
+    mental_health_notebook: Optional[bool] = None
+    mental_health_notebook_grade: Optional[str] = None
+    mental_health_notebook_expiry: Optional[date] = None
     medical_care_needs: Optional[bool] = None
     behavioral_support_needs: Optional[bool] = None
     living_situation: Optional[str] = None
@@ -78,6 +86,10 @@ class User(UserBase):
                 "disability_grade": "重度",
                 "support_level": "区分4",
                 "therapy_notebook": True,
+                "therapy_notebook_grade": "A",
+                "mental_health_notebook": False,
+                "mental_health_notebook_grade": None,
+                "mental_health_notebook_expiry": None,
                 "medical_care_needs": False,
                 "behavioral_support_needs": False,
                 "living_situation": "在宅",

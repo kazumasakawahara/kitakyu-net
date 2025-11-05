@@ -50,6 +50,10 @@ class UserService:
         if "birth_date" in user_data and isinstance(user_data["birth_date"], date):
             user_data["birth_date"] = user_data["birth_date"].isoformat()
 
+        # Convert mental health notebook expiry date if present
+        if "mental_health_notebook_expiry" in user_data and isinstance(user_data["mental_health_notebook_expiry"], date):
+            user_data["mental_health_notebook_expiry"] = user_data["mental_health_notebook_expiry"].isoformat()
+
         query = """
         CREATE (u:User {
             user_id: $user_id,
@@ -62,6 +66,10 @@ class UserService:
             disability_grade: $disability_grade,
             support_level: $support_level,
             therapy_notebook: $therapy_notebook,
+            therapy_notebook_grade: $therapy_notebook_grade,
+            mental_health_notebook: $mental_health_notebook,
+            mental_health_notebook_grade: $mental_health_notebook_grade,
+            mental_health_notebook_expiry: CASE WHEN $mental_health_notebook_expiry IS NOT NULL THEN date($mental_health_notebook_expiry) ELSE NULL END,
             medical_care_needs: $medical_care_needs,
             behavioral_support_needs: $behavioral_support_needs,
             living_situation: $living_situation,
@@ -94,6 +102,10 @@ class UserService:
                 if "birth_date" in created_user:
                     created_user["birth_date"] = (
                         created_user["birth_date"].to_native().isoformat()
+                    )
+                if "mental_health_notebook_expiry" in created_user and created_user["mental_health_notebook_expiry"]:
+                    created_user["mental_health_notebook_expiry"] = (
+                        created_user["mental_health_notebook_expiry"].to_native().isoformat()
                     )
                 if "created_at" in created_user:
                     created_user["created_at"] = (
@@ -142,6 +154,8 @@ class UserService:
                 # Convert Neo4j types
                 if "birth_date" in user:
                     user["birth_date"] = user["birth_date"].to_native().isoformat()
+                if "mental_health_notebook_expiry" in user and user["mental_health_notebook_expiry"]:
+                    user["mental_health_notebook_expiry"] = user["mental_health_notebook_expiry"].to_native().isoformat()
                 if "created_at" in user:
                     user["created_at"] = (
                         user["created_at"].iso_format()
@@ -249,6 +263,8 @@ class UserService:
                 # Convert Neo4j types
                 if "birth_date" in user:
                     user["birth_date"] = user["birth_date"].to_native().isoformat()
+                if "mental_health_notebook_expiry" in user and user["mental_health_notebook_expiry"]:
+                    user["mental_health_notebook_expiry"] = user["mental_health_notebook_expiry"].to_native().isoformat()
                 if "created_at" in user:
                     user["created_at"] = (
                         user["created_at"].iso_format()
@@ -297,8 +313,18 @@ class UserService:
                 date.fromisoformat(update_data["birth_date"])
             )
 
+        # Convert mental health notebook expiry date if present
+        if "mental_health_notebook_expiry" in update_data and isinstance(update_data["mental_health_notebook_expiry"], date):
+            update_data["mental_health_notebook_expiry"] = update_data["mental_health_notebook_expiry"].isoformat()
+
         # Build SET clause
-        set_clauses = [f"u.{key} = ${key}" for key in update_data.keys()]
+        set_clauses = []
+        for key in update_data.keys():
+            if key == "mental_health_notebook_expiry":
+                # Handle date type with CASE statement
+                set_clauses.append(f"u.{key} = CASE WHEN ${key} IS NOT NULL THEN date(${key}) ELSE NULL END")
+            else:
+                set_clauses.append(f"u.{key} = ${key}")
         set_clauses.append("u.updated_at = datetime($updated_at)")
 
         query = f"""
@@ -322,6 +348,8 @@ class UserService:
                 # Convert Neo4j types
                 if "birth_date" in user:
                     user["birth_date"] = user["birth_date"].to_native().isoformat()
+                if "mental_health_notebook_expiry" in user and user["mental_health_notebook_expiry"]:
+                    user["mental_health_notebook_expiry"] = user["mental_health_notebook_expiry"].to_native().isoformat()
                 if "created_at" in user:
                     user["created_at"] = (
                         user["created_at"].iso_format()

@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # API設定
-API_BASE_URL = "http://localhost:8001/api"
+API_BASE_URL = "http://localhost:8000/api"
 
 # セッション状態の初期化
 if "monitoring_step" not in st.session_state:
@@ -78,12 +78,40 @@ def get_plan(plan_id: str):
 def get_monitoring_records(plan_id: str):
     """モニタリング記録一覧を取得"""
     try:
-        response = requests.get(f"{API_BASE_URL}/monitoring/plans/{plan_id}/monitoring")
+        url = f"{API_BASE_URL}/monitoring/plans/{plan_id}/monitoring"
+        response = requests.get(url)
         response.raise_for_status()
-        return response.json()
+        records = response.json()
+        logger.info(f"Fetched {len(records)} monitoring records for plan {plan_id}")
+        return records
     except Exception as e:
-        logger.error(f"Error fetching monitoring records: {e}")
+        logger.error(f"Error fetching monitoring records from {url}: {e}")
+        st.error(f"モニタリング記録の取得エラー: {str(e)}")
         return []
+
+
+def get_latest_goal_evaluation(plan_id: str, goal_id: str) -> Dict[str, Any]:
+    """前回のモニタリング記録から目標評価を取得"""
+    records = get_monitoring_records(plan_id)
+    if not records:
+        return {"achievement_rate": 50, "achievement_status": "未達成"}
+
+    # 最新のモニタリング記録を取得
+    latest_record = records[0]
+    goal_evaluations = latest_record.get("goal_evaluations", [])
+
+    # 該当する目標の評価を検索
+    for evaluation in goal_evaluations:
+        if evaluation.get("goal_id") == goal_id:
+            return {
+                "achievement_rate": evaluation.get("achievement_rate", 50),
+                "achievement_status": evaluation.get("achievement_status", "未達成"),
+                "evaluation_comment": evaluation.get("evaluation_comment", ""),
+                "evidence": evaluation.get("evidence", "")
+            }
+
+    # 見つからない場合はデフォルト値
+    return {"achievement_rate": 50, "achievement_status": "未達成"}
 
 
 def create_monitoring_record(plan_id: str, record_data: Dict[str, Any]):
@@ -133,14 +161,34 @@ with col2:
     if selected_user_id:
         plans = get_user_plans(selected_user_id)
         if plans:
-            plan_options = {
-                f"{plan.get('plan_type', '個別支援計画')} (作成日: {plan.get('created_at', '')[:10]})": plan['plan_id']
-                for plan in plans
-            }
+            # 各計画のモニタリング記録数を取得
+            plans_with_monitoring = []
+            for plan in plans:
+                monitoring_count = len(get_monitoring_records(plan['plan_id']))
+                plans_with_monitoring.append({
+                    'plan': plan,
+                    'monitoring_count': monitoring_count
+                })
+
+            # モニタリング記録数でソート（多い順）
+            plans_with_monitoring.sort(key=lambda x: x['monitoring_count'], reverse=True)
+
+            # 表示用のオプションを作成
+            plan_options = {}
+            for item in plans_with_monitoring:
+                plan = item['plan']
+                count = item['monitoring_count']
+                if count > 0:
+                    display_text = f"📊 {plan.get('plan_type', '個別支援計画')} (作成日: {plan.get('created_at', '')[:10]}) - モニタリング: {count}件"
+                else:
+                    display_text = f"📄 {plan.get('plan_type', '個別支援計画')} (作成日: {plan.get('created_at', '')[:10]}) - 記録なし"
+                plan_options[display_text] = plan['plan_id']
+
             selected_plan_display = st.selectbox(
                 "計画を選択",
                 options=list(plan_options.keys()),
-                key="selected_plan_display"
+                key="selected_plan_display",
+                help="📊マークはモニタリング記録がある計画、📄マークは記録がない計画です"
             )
             selected_plan_id = plan_options[selected_plan_display]
 
@@ -156,6 +204,7 @@ st.markdown("---")
 # 既存のモニタリング記録表示
 if selected_plan_id:
     st.header("📋 過去のモニタリング記録")
+
 
     records = get_monitoring_records(selected_plan_id)
 
@@ -192,7 +241,7 @@ if selected_plan_id:
                     word_url = f"{API_BASE_URL}/monitoring/{record['monitoring_id']}/word"
                     st.link_button("📝 Wordダウンロード", word_url, use_container_width=True)
     else:
-        st.info("まだモニタリング記録がありません")
+        st.info("📝 この計画にはまだモニタリング記録がありません。下の「新規作成」ボタンから記録を作成できます。")
 
 st.markdown("---")
 
@@ -269,6 +318,12 @@ if st.session_state.get("creating_monitoring"):
         long_term_evaluations = []
 
         for i, goal in enumerate(plan.get("long_term_goals", []), 1):
+            # 前回の評価を取得
+            previous_eval = get_latest_goal_evaluation(
+                st.session_state["monitoring_plan_id"],
+                goal.get("goal_id")
+            )
+
             with st.expander(f"長期目標 {i}: {goal.get('goal_text', goal.get('goal', ''))}"):
                 col1, col2 = st.columns(2)
 
@@ -277,13 +332,20 @@ if st.session_state.get("creating_monitoring"):
                         "達成率 (%)",
                         min_value=0,
                         max_value=100,
-                        value=50,
-                        key=f"lt_achievement_{i}"
+                        value=previous_eval.get("achievement_rate", 50),
+                        key=f"lt_achievement_{i}",
+                        help="前回の評価を引き継いでいます"
                     )
+
+                    # 達成状況の選択肢インデックスを取得
+                    status_options = ["未達成", "一部達成", "達成", "超過達成"]
+                    previous_status = previous_eval.get("achievement_status", "未達成")
+                    default_index = status_options.index(previous_status) if previous_status in status_options else 0
 
                     achievement_status = st.selectbox(
                         "達成状況",
-                        options=["未達成", "一部達成", "達成", "超過達成"],
+                        options=status_options,
+                        index=default_index,
                         key=f"lt_status_{i}"
                     )
 
@@ -319,6 +381,12 @@ if st.session_state.get("creating_monitoring"):
         short_term_evaluations = []
 
         for i, goal in enumerate(plan.get("short_term_goals", []), 1):
+            # 前回の評価を取得
+            previous_eval = get_latest_goal_evaluation(
+                st.session_state["monitoring_plan_id"],
+                goal.get("goal_id")
+            )
+
             with st.expander(f"短期目標 {i}: {goal.get('goal_text', goal.get('goal', ''))}"):
                 col1, col2 = st.columns(2)
 
@@ -327,13 +395,20 @@ if st.session_state.get("creating_monitoring"):
                         "達成率 (%)",
                         min_value=0,
                         max_value=100,
-                        value=50,
-                        key=f"st_achievement_{i}"
+                        value=previous_eval.get("achievement_rate", 50),
+                        key=f"st_achievement_{i}",
+                        help="前回の評価を引き継いでいます"
                     )
+
+                    # 達成状況の選択肢インデックスを取得
+                    status_options = ["未達成", "一部達成", "達成", "超過達成"]
+                    previous_status = previous_eval.get("achievement_status", "未達成")
+                    default_index = status_options.index(previous_status) if previous_status in status_options else 0
 
                     achievement_status = st.selectbox(
                         "達成状況",
-                        options=["未達成", "一部達成", "達成", "超過達成"],
+                        options=status_options,
+                        index=default_index,
                         key=f"st_status_{i}"
                     )
 

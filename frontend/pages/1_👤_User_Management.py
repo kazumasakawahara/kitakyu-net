@@ -6,6 +6,7 @@
 """
 import streamlit as st
 import requests
+import pandas as pd
 from datetime import date, datetime
 from typing import Optional, Dict, Any
 
@@ -52,7 +53,7 @@ st.set_page_config(
 )
 
 # API設定
-API_BASE_URL = "http://localhost:8001/api"
+API_BASE_URL = "http://localhost:8000/api"
 
 # セッションステートの初期化
 if "selected_user_id" not in st.session_state:
@@ -225,6 +226,63 @@ def render_user_form(user_data: Optional[Dict[str, Any]] = None, is_edit: bool =
                 index=["未判定", "区分1", "区分2", "区分3", "区分4", "区分5", "区分6"].index(default_support_level) if default_support_level in ["未判定", "区分1", "区分2", "区分3", "区分4", "区分5", "区分6"] else 0
             )
 
+        st.subheader("手帳情報")
+
+        col_notebook1, col_notebook2 = st.columns(2)
+
+        with col_notebook1:
+            st.write("**療育手帳**")
+            therapy_notebook = st.checkbox(
+                "療育手帳あり",
+                value=user_data.get("therapy_notebook", False) if user_data else False
+            )
+            therapy_notebook_grade = st.selectbox(
+                "療育手帳等級",
+                ["未取得", "A", "B1", "B2", "A3"],
+                index=0 if not therapy_notebook else (
+                    ["未取得", "A", "B1", "B2", "A3"].index(user_data.get("therapy_notebook_grade", "未取得"))
+                    if user_data and user_data.get("therapy_notebook_grade") in ["未取得", "A", "B1", "B2", "A3"]
+                    else 0
+                ),
+                disabled=not therapy_notebook
+            )
+
+        with col_notebook2:
+            st.write("**精神保健福祉手帳**")
+            mental_health_notebook = st.checkbox(
+                "精神保健福祉手帳あり",
+                value=user_data.get("mental_health_notebook", False) if user_data else False
+            )
+            mental_health_notebook_grade = st.selectbox(
+                "精神保健福祉手帳等級",
+                ["未取得", "1級", "2級", "3級"],
+                index=0 if not mental_health_notebook else (
+                    ["未取得", "1級", "2級", "3級"].index(user_data.get("mental_health_notebook_grade", "未取得"))
+                    if user_data and user_data.get("mental_health_notebook_grade") in ["未取得", "1級", "2級", "3級"]
+                    else 0
+                ),
+                disabled=not mental_health_notebook
+            )
+
+            # 精神保健福祉手帳の有効期限
+            mental_health_notebook_expiry = None
+            if mental_health_notebook:
+                default_expiry = None
+                if user_data and user_data.get("mental_health_notebook_expiry"):
+                    try:
+                        default_expiry = datetime.strptime(
+                            user_data.get("mental_health_notebook_expiry"), "%Y-%m-%d"
+                        ).date()
+                    except:
+                        default_expiry = None
+
+                mental_health_notebook_expiry = st.date_input(
+                    "有効期限",
+                    value=default_expiry if default_expiry else date.today(),
+                    min_value=date.today(),
+                    help="精神保健福祉手帳の有効期限（通常2年間）"
+                )
+
         st.subheader("連絡先情報")
 
         col3, col4 = st.columns(2)
@@ -287,6 +345,11 @@ def render_user_form(user_data: Optional[Dict[str, Any]] = None, is_edit: bool =
                 "gender": gender if gender else None,
                 "disability_type": ", ".join(disability_types) if disability_types else "未設定",  # 必須フィールド
                 "support_level": support_level if support_level else None,
+                "therapy_notebook": therapy_notebook,
+                "therapy_notebook_grade": therapy_notebook_grade if therapy_notebook and therapy_notebook_grade != "未取得" else None,
+                "mental_health_notebook": mental_health_notebook,
+                "mental_health_notebook_grade": mental_health_notebook_grade if mental_health_notebook and mental_health_notebook_grade != "未取得" else None,
+                "mental_health_notebook_expiry": mental_health_notebook_expiry.strftime("%Y-%m-%d") if mental_health_notebook and mental_health_notebook_expiry else None,
                 "contact_address": address if address else None,  # addressではなくcontact_address
                 "contact_phone": phone if phone else None,  # phoneではなくcontact_phone
                 "guardian_name": guardian_name if guardian_name else None,
@@ -471,50 +534,135 @@ def render_user_detail(user_id: str):
         st.write(f"**性別**: {user['gender']}")
 
     with col2:
-        st.write(f"**障害種別**: {user.get('disability_types', '未設定')}")
+        st.write(f"**障害種別**: {user.get('disability_type', '未設定')}")
         st.write(f"**支援区分**: {user.get('support_level', '未判定')}")
-        st.write(f"**住所**: {user.get('address', '未設定')}")
-        st.write(f"**電話**: {user.get('phone', '未設定')}")
+        st.write(f"**居住状況**: {user.get('living_situation', '未設定')}")
+        st.write(f"**電話**: {user.get('contact_phone', '未設定')}")
+
+    # 手帳情報
+    disability_type = user.get("disability_type", "")
+    therapy_notebook_grade = user.get("therapy_notebook_grade", "")
+    mental_health_notebook_grade = user.get("mental_health_notebook_grade", "")
+    mental_health_notebook_expiry = user.get("mental_health_notebook_expiry", "")
+
+    if therapy_notebook_grade or mental_health_notebook_grade:
+        st.write("")
+        st.write("**📋 手帳情報**")
+
+        if "知的" in disability_type and therapy_notebook_grade:
+            st.write(f"  • 療育手帳: {therapy_notebook_grade}")
+
+        if "精神" in disability_type and mental_health_notebook_grade:
+            expiry_info = ""
+            if mental_health_notebook_expiry:
+                expiry_date_str = mental_health_notebook_expiry[:10]
+                expiry_info = f" (有効期限: {expiry_date_str})"
+
+                # 有効期限警告
+                try:
+                    from datetime import datetime
+                    expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
+                    today = datetime.now().date()
+                    days_until = (expiry_date - today).days
+
+                    if days_until < 0:
+                        expiry_info += " ⚠️期限切れ"
+                    elif days_until <= 90:
+                        expiry_info += f" ⚠️残り{days_until}日"
+                except:
+                    pass
+
+            st.write(f"  • 精神保健福祉手帳: {mental_health_notebook_grade}{expiry_info}")
 
     if user.get("guardian_name"):
+        st.write("")
         st.write(f"**保護者**: {user['guardian_name']} ({user.get('guardian_relation', '')})")
-
-    if user.get("notes"):
-        st.write("**特記事項**:")
-        st.info(user["notes"])
 
     st.markdown("---")
 
-    # アセスメント履歴（将来実装）
+    # アセスメント履歴
     st.write("### 📊 アセスメント履歴")
-    st.info("アセスメント履歴は今後実装予定です")
+    try:
+        assessments_response = requests.get(f"{API_BASE_URL}/assessments/user/{user_id}")
+        if assessments_response.status_code == 200:
+            assessments = assessments_response.json()
+            if assessments:
+                assessment_df = pd.DataFrame([
+                    {
+                        "実施日": a.get("interview_date", ""),
+                        "参加者": a.get("interview_participants", ""),
+                        "信頼度": f"{a.get('confidence_score', 0):.0%}" if a.get('confidence_score') else "未分析",
+                        "作成日": a.get("created_at", "")[:10] if a.get("created_at") else "",
+                        "ID": a.get("assessment_id", "")
+                    }
+                    for a in assessments
+                ])
+                st.dataframe(assessment_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("アセスメント履歴がありません")
+        else:
+            st.warning("アセスメント履歴の取得に失敗しました")
+    except Exception as e:
+        st.error(f"エラー: {str(e)}")
 
-    # 支援計画履歴（将来実装）
+    # 支援計画履歴
     st.write("### 🎯 支援計画履歴")
-    st.info("支援計画履歴は今後実装予定です")
+    try:
+        plans_response = requests.get(f"{API_BASE_URL}/plans/user/{user_id}")
+        if plans_response.status_code == 200:
+            plans = plans_response.json()
+            if plans:
+                plan_df = pd.DataFrame([
+                    {
+                        "計画期間": f"{p.get('start_date', '')} 〜 {p.get('end_date', '')}",
+                        "長期目標数": len(p.get('long_term_goals', [])),
+                        "短期目標数": len(p.get('short_term_goals', [])),
+                        "ステータス": p.get('status', ''),
+                        "作成日": p.get("created_at", "")[:10] if p.get("created_at") else "",
+                        "ID": p.get("plan_id", "")
+                    }
+                    for p in plans
+                ])
+                st.dataframe(plan_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("支援計画履歴がありません")
+        else:
+            st.warning("支援計画履歴の取得に失敗しました")
+    except Exception as e:
+        st.error(f"エラー: {str(e)}")
 
     # アクションボタン
     st.markdown("---")
+
+    # 主要アクション
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("編集", type="primary", use_container_width=True):
+        if st.button("📝 編集", type="primary", use_container_width=True):
             st.session_state["selected_user_id"] = user_id
             st.session_state["edit_mode"] = True
             st.session_state["view_user_id"] = None
             st.rerun()
 
     with col2:
-        if st.button("アセスメント実施 →", use_container_width=True):
+        if st.button("📊 アセスメント実施", use_container_width=True):
             st.session_state["selected_user_id"] = user_id
             st.switch_page("pages/2_📊_Assessment.py")
 
     with col3:
-        if st.button("支援計画作成 →", use_container_width=True):
+        if st.button("🎯 支援計画作成", use_container_width=True):
             st.session_state["selected_user_id"] = user_id
             st.switch_page("pages/3_🎯_Plan_Creation.py")
 
     with col4:
+        if st.button("📈 詳細ダッシュボード", use_container_width=True):
+            st.session_state["selected_user_id"] = user_id
+            st.switch_page("pages/5_👤_User_Detail.py")
+
+    # 削除ボタン（別行）
+    st.write("")
+    col_delete1, col_delete2, col_delete3 = st.columns([3, 1, 3])
+    with col_delete2:
         if st.button("🗑️ 削除", use_container_width=True):
             st.session_state["confirm_delete_user_id"] = user_id
             st.rerun()
@@ -558,7 +706,7 @@ with col3:
         st.switch_page("pages/4_🏥_Facility_Search.py")
 with col4:
     if st.button("📈 モニタリング", use_container_width=True):
-        st.switch_page("pages/5_📈_Monitoring.py")
+        st.switch_page("pages/4_📊_Monitoring.py")
 
 st.markdown("---")
 
